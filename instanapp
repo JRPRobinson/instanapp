@@ -3,14 +3,17 @@
 readonly OPT_PATH="/opt"
 readonly DOWNLOAD_PATH="$HOME/Downloads"
 readonly APP_DESKTOP="$HOME/.local/share/applications"
+readonly DIR_INSTANAPP_INF="$HOME/.local/share/instanapp"
+readonly NAME_ARCHIVE="instanapp_apps.txt"
 
 usage() {
   cat <<EOF
-Uso: $0 [-i archivo] [-u] [-h]
+Uso: $0 [-i archive] [-l] [-p appname] [-h]
 
 Opciones:
   -i  Instala la aplicación en /opt y crea el .desktop
-  -u  Buscar actualizaciones
+  -l  Lista las apps instaladas con instanapp
+  -p  Purga la aplicacion instalada
   -h  Ayuda
 EOF
 }
@@ -127,7 +130,23 @@ EOF
 
   chmod +x "$desktop_file"
   update-desktop-database "$APP_DESKTOP" 2>/dev/null
-  echo "Creado: $desktop_file"
+  echo "$name"
+}
+
+create_list_files() {
+  local name="$1"
+  local dir_complete="$DIR_INSTANAPP_INF/$NAME_ARCHIVE"
+
+  if [[ ! -f "$dir_complete"  ]]; then
+    mkdir -p "$DIR_INSTANAPP_INF"
+    touch "$dir_complete"
+  fi
+  
+  repeat_app=$(grep -Fxc -- "$name" "$dir_complete")
+  
+  [[ "$repeat_app" -ge 1 ]] && { return 1; }
+  
+  echo "$name" >> "$dir_complete"
 }
 
 install_app() {
@@ -137,15 +156,39 @@ install_app() {
   [[ -f $archive ]] || { echo "Archivo no encontrado: $1" >&2; return 1; }
 
   app_dir=$(extract_app "$archive") || return 1
-  create_desktop_entry "$app_dir"
+  name=$(create_desktop_entry "$app_dir") || return 1
+  create_list_files "$name"
+}
+
+delete_app() {
+  local app="$1" 
+  local dir_complete="$DIR_INSTANAPP_INF/$NAME_ARCHIVE"
+  
+  
+  if [[ -z "$app" ]]; then
+    echo "Debes indicar el nombre de la app"
+    return 1
+  fi
+
+  if ! grep -qxF -- "$app" "$dir_complete"; then
+    echo "Esa app no se instaló con nosotros"
+    return 1
+  fi
+
+
+  sudo rm -rf "$OPT_PATH/$app"
+  rm "$APP_DESKTOP/$app.desktop"
+  sed -i "s/ *${app} *//g; /^[[:space:]]*$/d" "$dir_complete"
+  echo "Se acaba de eliminar la app $app"
 }
 
 [[ $# -eq 0 ]] && { usage; exit 1; }
 
-while getopts "i:uh" option; do
+while getopts "i:lp:h" option; do
   case $option in
     i) install_app "$OPTARG" ;;
-    u) echo "Buscando actualizaciones..." ;;
+    l) cat "$DIR_INSTANAPP_INF/$NAME_ARCHIVE" ;;
+    p) delete_app "$OPTARG" ;;
     h) usage; exit 0 ;;
     \?) usage; exit 1 ;;
   esac
