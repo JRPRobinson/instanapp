@@ -1,9 +1,9 @@
-# Instanapp ![Estado](https://img.shields.io/badge/estado-BETA-orange)
+# Instanapp ![Versión](https://img.shields.io/badge/versión-1.0.0-brightgreen)
 
 Instalación y configuración de apps externas por medio del terminal.
 
-> **Proyecto en fase BETA**
-> Instanapp todavía no tiene todas las funcionalidades previstas. Por ahora cuenta con pocas opciones, y las iré desarrollando poco a poco. Puede haber cambios en el uso y en las opciones disponibles entre versiones.
+> **Versión 1.0**
+> Instanapp ya es estable. Seguiré añadiendo funcionalidades en futuras versiones.
 
 Instanapp es un script en Bash que toma un archivo comprimido de una aplicación (por ejemplo, Postman descargado como `.tar.gz`), lo instala en `/opt` y crea automáticamente el lanzador `.desktop`. Así la app aparece en el menú de aplicaciones de tu escritorio sin que tengas que configurar nada a mano. También puede listar las apps que instaló y purgarlas cuando ya no las necesites.
 
@@ -33,15 +33,13 @@ Instanapp es un script en Bash que toma un archivo comprimido de una aplicación
 ```bash
 git clone https://github.com/JRPRobinson/instanapp.git
 cd instanapp
-chmod +x instanapp.sh
+chmod +x instanapp
 ```
-
-> Cambia `instanapp.sh` por el nombre real de tu script si es otro.
 
 ## Uso
 
 ```bash
-./instanapp.sh [-i archivo] [-l] [-p nombre] [-h]
+./instanapp [-i archivo] [-l] [-p nombre] [-h]
 ```
 
 | Opción | Descripción |
@@ -56,25 +54,25 @@ chmod +x instanapp.sh
 Instalar una app desde un archivo en `~/Downloads`:
 
 ```bash
-./instanapp.sh -i postman-linux-x64.tar.gz
+./instanapp -i postman-linux-x64.tar.gz
 ```
 
 Instalar usando una ruta completa:
 
 ```bash
-./instanapp.sh -i /ruta/a/mi-app.zip
+./instanapp -i /ruta/a/mi-app.zip
 ```
 
 Ver las apps instaladas con Instanapp:
 
 ```bash
-./instanapp.sh -l
+./instanapp -l
 ```
 
 Purgar una app (usa el nombre tal como aparece en `-l`, que coincide con su carpeta en `/opt`):
 
 ```bash
-./instanapp.sh -p Postman
+./instanapp -p Postman
 ```
 
 ## ¿Cómo funciona?
@@ -97,7 +95,7 @@ Purgar una app (usa el nombre tal como aparece en `-l`, que coincide con su carp
 
 ## Estado del proyecto
 
-Instanapp se encuentra en **BETA**: las opciones disponibles son limitadas y el proyecto seguirá creciendo con nuevas funcionalidades.
+Instanapp es **estable** (v1.0) y seguirá creciendo con nuevas funcionalidades.
 
 **Disponible:**
 - [x] Instalación desde archivos comprimidos (`-i`)
@@ -107,14 +105,6 @@ Instanapp se encuentra en **BETA**: las opciones disponibles son limitadas y el 
 - [x] Ayuda (`-h`)
 
 Si tienes ideas o encuentras errores, puedes abrir un [issue](https://github.com/JRPRobinson/instanapp/issues).
-
-## Contribuir
-
-1. Haz un fork del proyecto
-2. Crea una rama (`git checkout -b feature/mi-mejora`)
-3. Haz commit de tus cambios (`git commit -m "Agrega mi mejora"`)
-4. Haz push (`git push origin feature/mi-mejora`)
-5. Abre un Pull Request
 
 ## Licencia
 
