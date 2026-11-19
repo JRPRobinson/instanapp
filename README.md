@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="Logo de instanapp" width="320">
+  <img src="assets/logo.png" alt="Logo de instanapp" width="320">
 </p>
 
 <h1 align="center">Instanapp</h1>
