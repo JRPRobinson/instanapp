@@ -5,6 +5,7 @@ readonly DOWNLOAD_PATH="$HOME/Downloads"
 readonly APP_DESKTOP="$HOME/.local/share/applications"
 readonly DIR_INSTANAPP_INF="$HOME/.local/share/instanapp"
 readonly NAME_ARCHIVE="instanapp_apps.txt"
+readonly LIST_FILE="$DIR_INSTANAPP_INF/$NAME_ARCHIVE"
 
 usage() {
   cat <<EOF
@@ -18,23 +19,79 @@ Opciones:
 EOF
 }
 
+# ---------------------------------------------------------------
+# Barra de progreso estilo pacman (escribe a stderr para no
+# mezclarse con los valores que se capturan con $(...))
+# ---------------------------------------------------------------
+progress_bar() {
+  local label=$1 current=$2 total=$3
+  local cols pct left right width filled bar rest
+
+  cols=$(tput cols 2>/dev/null || echo 80)
+  (( total < 1 )) && total=1
+  (( current > total )) && current=$total
+  pct=$(( current * 100 / total ))
+
+  left=$(printf " %-18.18s %5d/%-5d" "$label" "$current" "$total")
+  right=$(printf " %3d%%" "$pct")
+
+  width=$(( cols - ${#left} - ${#right} - 3 ))
+  (( width < 10 )) && width=10
+
+  filled=$(( pct * width / 100 ))
+  bar=$(printf '%*s' "$filled" '' | tr ' ' '#')
+  rest=$(printf '%*s' "$(( width - filled ))" '' | tr ' ' '-')
+
+  printf "\r%s [%s%s]%s" "$left" "$bar" "$rest" "$right" >&2
+}
+
+# ---------------------------------------------------------------
+# Extrae el archivo mostrando progreso real (por archivo extraído)
+# ---------------------------------------------------------------
+extract_with_progress() {
+  local archive="$1" file_type="$2" tmp="$3"
+  local total=0 count=0
+  local -a cmd
+
+  case $file_type in
+    application/zip)
+      total=$(unzip -Z1 "$archive" | wc -l)
+      cmd=(unzip -o "$archive" -d "$tmp") ;;
+    application/gzip|application/x-xz|application/x-bzip2|application/x-tar)
+      total=$(tar -tf "$archive" | wc -l)
+      cmd=(tar -xvf "$archive" -C "$tmp") ;;
+    *)
+      echo "Tipo no soportado: $file_type" >&2
+      return 1 ;;
+  esac
+
+  "${cmd[@]}" | while IFS= read -r _; do
+    count=$(( count + 1 ))
+    progress_bar "Extrayendo" "$count" "$total"
+  done
+
+  # si la extracción falló, no mostramos 100%
+  [[ ${PIPESTATUS[0]} -eq 0 ]] || { echo >&2; return 1; }
+
+  progress_bar "Extrayendo" "$total" "$total"
+  echo >&2
+}
+
 extract_app() {
   local archive="$1" file_type tmp name dest
   local -a entries
 
   file_type=$(file --mime-type -b "$archive")
   tmp=$(mktemp -d)
+  trap "rm -rf '$tmp'" INT
 
-  case $file_type in
-    application/zip)
-      unzip -q "$archive" -d "$tmp" ;;
-    application/gzip|application/x-xz|application/x-bzip2|application/x-tar)
-      tar -xf "$archive" -C "$tmp" ;;
-    *)
-      echo "Tipo no soportado: $file_type" >&2
-      rm -rf "$tmp"
-      return 1 ;;
-  esac
+  extract_with_progress "$archive" "$file_type" "$tmp" || {
+    rm -rf "$tmp"
+    trap - INT
+    return 1
+  }
+
+  echo " Moviendo a $OPT_PATH ..." >&2
 
   mapfile -t entries < <(find "$tmp" -mindepth 1 -maxdepth 1)
 
@@ -55,6 +112,7 @@ extract_app() {
   fi
 
   rm -rf "$tmp"
+  trap - INT
   echo "$dest"
 }
 
@@ -134,51 +192,60 @@ EOF
 }
 
 create_list_files() {
-  local name="$1"
-  local dir_complete="$DIR_INSTANAPP_INF/$NAME_ARCHIVE"
+  local name="$1" repeat_app
 
-  if [[ ! -f "$dir_complete"  ]]; then
-    mkdir -p "$DIR_INSTANAPP_INF"
-    touch "$dir_complete"
-  fi
-  
-  repeat_app=$(grep -Fxc -- "$name" "$dir_complete")
-  
-  [[ "$repeat_app" -ge 1 ]] && { return 1; }
-  
-  echo "$name" >> "$dir_complete"
+  mkdir -p "$DIR_INSTANAPP_INF"
+  touch "$LIST_FILE"
+
+  repeat_app=$(grep -Fxc -- "$name" "$LIST_FILE")
+  [[ "$repeat_app" -ge 1 ]] && return 1
+
+  echo "$name" >> "$LIST_FILE"
 }
 
 install_app() {
-  local archive="$1" app_dir
+  local archive="$1" app_dir name
+
+  sudo -v || return 1   # pide la contraseña antes, para no ensuciar la barra
 
   [[ -f $archive ]] || archive="$DOWNLOAD_PATH/$archive"
   [[ -f $archive ]] || { echo "Archivo no encontrado: $1" >&2; return 1; }
 
   app_dir=$(extract_app "$archive") || return 1
+
+  echo " Creando acceso directo ..." >&2
   name=$(create_desktop_entry "$app_dir") || return 1
-  create_list_files "$name"
+
+  create_list_files "$name" || true   # si ya estaba registrada, no es error
+  echo " Instalada: $name" >&2
+}
+
+list_apps() {
+  if [[ ! -s $LIST_FILE ]]; then
+    echo "No hay apps instaladas con instanapp"
+    return 0
+  fi
+  cat "$LIST_FILE"
 }
 
 delete_app() {
-  local app="$1" 
-  local dir_complete="$DIR_INSTANAPP_INF/$NAME_ARCHIVE"
-  
-  
+  local app="$1"
+
   if [[ -z "$app" ]]; then
-    echo "Debes indicar el nombre de la app"
+    echo "Debes indicar el nombre de la app" >&2
     return 1
   fi
 
-  if ! grep -qxF -- "$app" "$dir_complete"; then
-    echo "Esa app no se instaló con nosotros"
+  if [[ ! -f $LIST_FILE ]] || ! grep -qxF -- "$app" "$LIST_FILE"; then
+    echo "Esa app no se instaló con nosotros" >&2
     return 1
   fi
-
 
   sudo rm -rf "$OPT_PATH/$app"
-  rm "$APP_DESKTOP/$app.desktop"
-  sed -i "s/ *${app} *//g; /^[[:space:]]*$/d" "$dir_complete"
+  rm -f "$APP_DESKTOP/$app.desktop"
+  grep -vxF -- "$app" "$LIST_FILE" > "$LIST_FILE.tmp"
+  mv "$LIST_FILE.tmp" "$LIST_FILE"
+  update-desktop-database "$APP_DESKTOP" 2>/dev/null
   echo "Se acaba de eliminar la app $app"
 }
 
@@ -187,7 +254,7 @@ delete_app() {
 while getopts "i:lp:h" option; do
   case $option in
     i) install_app "$OPTARG" ;;
-    l) cat "$DIR_INSTANAPP_INF/$NAME_ARCHIVE" ;;
+    l) list_apps ;;
     p) delete_app "$OPTARG" ;;
     h) usage; exit 0 ;;
     \?) usage; exit 1 ;;
